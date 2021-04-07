@@ -18,12 +18,20 @@ endm
 .code
 
 ;arguments callback, context, are passed in rcx, rdx, respectively
-;stackman_switch PROC FRAME
-NESTED_ENTRY stackman_switch, _TEXT$00
-	; save all registers that the x64 ABI specifies as non-volatile.
-	; This includes some mmx registers.  May not always be necessary,
-	; unless our application is doing 3D, but better safe than sorry.
-	alloc_stack 168; 10 * 16 bytes, plus 8 bytes to make stack 16 byte aligned
+stackman_switch PROC FRAME
+	; push_reg, alloc_stack, save_xmm128, are macros that invoke the .prolog macros
+	push_reg rbp
+
+	push_reg r15
+	push_reg r14
+	push_reg r13
+	push_reg r12
+	push_reg rbx
+	push_reg rdi
+	push_reg rsi
+
+	sub rsp, 168
+	.allocstack 168	;8 bytes align, 10x16 bytes for xmm
 	save_xmm128 xmm15, 144
 	save_xmm128 xmm14, 128
 	save_xmm128 xmm13, 112
@@ -35,19 +43,12 @@ NESTED_ENTRY stackman_switch, _TEXT$00
 	save_xmm128 xmm7,  16
 	save_xmm128 xmm6,  0
 	
-	push_reg r15
-	push_reg r14
-	push_reg r13
-	push_reg r12
-	
-	push_reg rbp
-	push_reg rbx
-	push_reg rdi
-	push_reg rsi
-	
-	sub rsp, 20h ;allocate shadow stack space for callee arguments
+	sub rsp, 20h
 	.allocstack 20h
-.endprolog
+	lea rbp, 20h [rsp]
+	.setframe rbp, 0
+	.endprolog
+
 
 	;save argments in nonvolatile registers
 	mov r12, rcx ;callback
@@ -74,15 +75,6 @@ NESTED_ENTRY stackman_switch, _TEXT$00
 	;return the rax
 	
 	add rsp, 20h
-	pop_reg rsi
-	pop_reg rdi
-	pop_reg rbx
-	pop_reg rbp
-	
-	pop_reg r12
-	pop_reg r13
-	pop_reg r14
-	pop_reg r15
 	
 	load_xmm128 xmm15, 144
 	load_xmm128 xmm14, 128
@@ -95,19 +87,27 @@ NESTED_ENTRY stackman_switch, _TEXT$00
 	load_xmm128 xmm7,  16
 	load_xmm128 xmm6,  0
 	add rsp, 168
+	pop_reg rsi
+	pop_reg rdi
+	pop_reg rbx
+	
+	pop_reg r12
+	pop_reg r13
+	pop_reg r14
+	pop_reg r15
+	
 	ret
 	
-NESTED_END stackman_switch, _TEXT$00
-;stackman_switch ENDP 
+stackman_switch ENDP 
 	
 ; based on template from https://docs.microsoft.com/en-us/cpp/build/exception-handling-x64?view=msvc-160
 stackman_call PROC FRAME
     push rbp
     .pushreg rbp
-	; now our stack is 16 byte aligned.  don't need additional spacle
-    ;sub rsp, 040h
-    ;.allocstack 040h
-    lea rbp, [rsp+00h]
+	; now our stack is 16 byte aligned.  Need shadow stack for called function
+    sub rsp, 020h
+    .allocstack 020h
+    lea rbp, [rsp+20h]
     .setframe rbp, 00h
     .endprolog
 
